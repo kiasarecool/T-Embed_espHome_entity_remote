@@ -2,8 +2,8 @@ substitutions:
 ###replace with your info, and it should work!
 ## please explore the code and customize the display @ the bottom!!!  
   esp_name: "T-Embed"
-  encryption_key: "zu9Vpr8R7IXEg5phtSxsSmwf7djcLxPp1suwYhODBfM="
-  ota_pass: "3c1efc6f875af16b4560b6c777098501"
+  encryption_key: ""
+  ota_pass: ""
   ap_pass: ""
   media_title_entity: "media_player.kodi_appletv"
   media_volume_entity: "media_player.bedroom_smart_tv"
