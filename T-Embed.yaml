@@ -464,11 +464,11 @@ display:
         lambda: |-
           it.strftime(230, 0, id(font3), id(green), "%H:%M", id(esp_time).now());
           it.filled_rectangle(54, 31, id(light_pct).state / 255 * 200, 49, id(violet));
-          it.rectangle(52, 30, 200, 50, id(red));
+          it.rectangle(52, 30, 201, 50, id(red));
           it.print(10, 110, id(font4), id(green), "Light Dimmer");
       - id: page4
         lambda: |-
           it.strftime(230, 0, id(font3), id(green), "%H:%M", id(esp_time).now());
           it.filled_rectangle(54, 31, id(light_temp).state / 217 * 200 - 153, 49, id(red));
-          it.rectangle(52, 30, 200, 50, id(blue));
+          it.rectangle(52, 30, 201, 50, id(blue));
           it.print(10, 110, id(font4), id(green), "Color Temp");
