@@ -2,28 +2,27 @@ substitutions:
 ###replace with your info, and it should work!
 ## please explore the code and customize the display @ the bottom!!!  
   esp_name: "T-Embed"
-  encryption_key: ""
-  ota_pass: ""
+  encryption_key: "zu9Vpr8R7IXEg5phtSxsSmwf7djcLxPp1suwYhODBfM="
+  ota_pass: "3c1efc6f875af16b4560b6c777098501"
   ap_pass: ""
   media_title_entity: "media_player.kodi_appletv"
   media_volume_entity: "media_player.bedroom_smart_tv"
   climate_entity: "climate.thermostat_2"
   temp_sensor_1: "sensor.dht_2_temp"
   temp_sensor_2: "sensor.bedroom_temperature"
-  average_sensor: "sensor.average_indoor_temperature"
-  light1: "light.bed_lamp"
-  input_number_entity: "input_number.target"
-  color_temp_step_size: "25"
-  dimmer_step_size: "25"
-  volume_step_size: "2"
-  temp_step_size: "2"
-  ##temperature steps = input / 4
-  ## for example 2 = 0.5 step size
+  temp_sensor_3: "sensor.bme680_box_temperature"
+
+  humid_sensor_1: "sensor.bme680_box_humidity"
+
+  iaq_sensor_1: "sensor.bme680_box_iaq"
+  average: "sensor.average_indoor_temperature"
+  light1: "light.bedroom_lights"
+  light2: "light.kitchen_lights"
+  light3: "light.flood_group"
   hide_encoder_from_HA: "true"
 esphome:
   name: t-embed
   friendly_name: t-embed
-
   platformio_options:
     board_build.mcu: esp32s3
     board_build.name: "LilyGO T-Embed ESP32-S3"
@@ -39,27 +38,23 @@ esphome:
           id(display1).enable();
           id(display1).transfer_byte(0x11);
           id(display1).disable();
-# Also, turn the lights on
-      - delay: 2s
+      - delay: 5s
       - switch.turn_on: power_on
       - switch.turn_on: backlight
-
+      - delay: 25s
+      - script.execute: set_rot_temp
 esp32:
   board: esp32-s3-devkitc-1
   framework:
     type: arduino
-
 # Enable logging
 logger:
-
 # Enable Home Assistant API
 api:
   encryption:
     key: "${encryption_key}"
-
 ota:
   password: "${ota_pass}"
-
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
@@ -68,16 +63,15 @@ wifi:
   ap:
     ssid: "Oh no- ur T-Embed lost its wi-fi"
     password: "${ap_pass}"
-
 captive_portal:
 globals: 
   - id: wifi_connection
     type: bool
     restore_value: no
     initial_value: "false"
-## WIFI CONNECTION CHECK TIMER
+#######################################
 interval: 
-  - interval: 30s
+  - interval: 15s
     then:
       - if:
           condition:
@@ -88,16 +82,133 @@ interval:
           else:
             - lambda: |-
                 id(wifi_connection) = false;
-## ROTATY CLICK
+###########################################
+script:
+  - id: mute
+    mode: single 
+    then:
+      - sensor.rotary_encoder.set_value:
+          id: encoder
+          value: "0"
+      - homeassistant.service:
+          service: media_player.volume_set
+          data_template:                 
+            volume_level: "0.00"
+            entity_id: ${media_volume_entity}
+  - id: set_vol
+    mode: queued 
+    then:
+      - homeassistant.service:
+          service: media_player.volume_set
+          data_template:                 
+            volume_level: !lambda "return id(encoder).state / 100;"
+            entity_id: ${media_volume_entity}
+  - id: media_off
+    mode: single
+    then:
+      - homeassistant.service: 
+          service: media_player.turn_off
+          data_template:
+            entity_id: ${media_volume_entity}
+  - id: media_on
+    mode: single
+    then:
+      - homeassistant.service: 
+          service: media_player.turn_on
+          data_template:
+            entity_id: ${media_volume_entity}
+  - id: hvac_on
+    mode: single
+    then:
+      - homeassistant.service: 
+          service: climate.turn_on
+          data_template:
+            entity_id: ${climate_entity}
+  - id: light1_toggle
+    mode: single
+    then:
+      - homeassistant.service: 
+          service: light.toggle
+          data_template:
+            transition: "8"
+            entity_id: ${light1}
+  - id: light2_toggle
+    mode: single
+    then:
+      - homeassistant.service: 
+          service: light.toggle
+          data_template:
+            entity_id: ${light2}
+  - id: set_temp
+    mode: restart
+    then:
+      - delay: 750ms
+      - homeassistant.service: 
+          service: input_number.set_value
+          data_template:
+            value: !lambda "return id(encoder).state / 2;"
+            entity_id: input_number.target 
+  - id: hvac_off
+    mode: single
+    then: 
+      - homeassistant.service: 
+          service: climate.turn_off
+          data_template:
+            entity_id: ${climate_entity}
+  - id: set_rot_temp
+    mode: restart
+    then:
+      - sensor.rotary_encoder.set_value:
+          id: encoder
+          value: !lambda "return id(target).state * 2;"
+  - id: set_light1
+    mode: queued
+    then:
+      - homeassistant.service: 
+          service: light.turn_on
+          data_template:
+            brightness: !lambda "return id(encoder).state / 200 * 255;"
+            entity_id: ${light1}
+  - id: set_light2
+    mode: queued
+    then:
+      - homeassistant.service: 
+          service: light.turn_on
+          data_template:
+            brightness: !lambda "return id(encoder).state / 200 * 255;"
+            entity_id: ${light2}
+  - id: set_light1_rot
+    mode: restart
+    then:
+      - sensor.rotary_encoder.set_value:
+         id: encoder
+         value: !lambda "return id(light1_brt).state / 255 * 100;"
+  - id: set_light2_rot
+    mode: restart
+    then:
+      - sensor.rotary_encoder.set_value:
+         id: encoder
+         value: !lambda "return id(light2_brt).state / 255 * 100;"
+  - id: set_rot_vol
+    mode: restart
+    then:
+      - sensor.rotary_encoder.set_value:
+         id: encoder
+         value: !lambda "return id(media_entity_vol).state * 100;"
+
+####################################################
 binary_sensor:
   - platform: gpio
     name: '${esp_name} Button'
     id: button1
     pin: 0
     internal: true
-#    filters:
-#     invert: 
-    on_press:
+    filters:
+      - invert:
+      - delayed_off: 50ms    
+    on_multi_click:
+    - timing: 
+        - ON for 50ms to 400ms
       then:
         - display.page.show_next: display1
         - if:
@@ -106,44 +217,100 @@ binary_sensor:
                 id: display1
                 page_id: page1
             then:
-              - sensor.rotary_encoder.set_value:
-                 id: encoder
-                 value: !lambda "return id(thermostat_setpoint).state * 2;"
-##Sensors
+              - script.execute: set_rot_temp
+        - if:
+            condition:
+              display.is_displaying_page:
+                id: display1
+                page_id: page2
+            then:
+              - script.execute: set_rot_vol
+        - if:
+            condition:
+              display.is_displaying_page:
+                id: display1
+                page_id: page3
+            then:
+              - script.execute: set_light1_rot
+        - if:
+            condition:
+              display.is_displaying_page:
+                id: display1
+                page_id: page4
+            then:
+              - script.execute: set_light2_rot
+    - timing:
+        - ON for 400ms to 2000ms 
+      then:
+        - if:
+            condition:
+              display.is_displaying_page:
+                id: display1
+                page_id: page2
+            then:
+              - script.execute: media_on
+              - script.execute: mute
+        - if:
+            condition:
+              display.is_displaying_page:
+                id: display1
+                page_id: page3
+            then:
+              - script.execute: light1_toggle
+        - if:
+            condition:
+              display.is_displaying_page:
+                id: display1
+                page_id: page4
+            then:
+              - script.execute: light2_toggle
+    - timing:
+        - ON for 50ms to 500ms
+        - OFF for 50ms to 1000ms
+        - ON for 50ms to 500ms 
+      then:
+        - if:
+            condition:
+              display.is_displaying_page:
+                id: display1
+                page_id: page1
+            then:
+              - script.execute: hvac_off
+        - if:
+            condition:
+              display.is_displaying_page:
+                id: display1
+                page_id: page2
+            then:
+              - script.execute: media_off
+    - timing:
+        - ON for 2.5s to 6s
+      then:
+        - switch.toggle: backlight
+    - timing: 
+        - ON for 6s to 10s
+      then:
+        - if:
+            condition:
+              display.is_displaying_page:
+                id: display1
+                page_id: page1
+            then:
+              - script.execute: hvac_on
+##############################################################################
 sensor:
   - platform: rotary_encoder
     name: "${esp_name} Rotary Encoder"
     id: encoder
     pin_a: GPIO02
     pin_b: GPIO01
-    resolution: ${temp_step_size}
+    resolution: 2
     restore_mode: RESTORE_DEFAULT_ZERO
     accuracy_decimals: 0
     publish_initial_value: true
     min_value: 0
-    max_value: 200
+    max_value: 300
     internal: ${hide_encoder_from_HA}
-#    filters:
-#    - debounce: 0.1s
-##TO-DO figure out the dang dial lights on the t-embed, assingn to corepond to rotary value
-#    on_value_range:
-#        - below: 10
-#          then:
-#            -  light.turn_on:
-#                id: leds
-#                brightness: 10%
-#                red: 100%
-#                green: 0%
-#                blue: 0%
-#        - above: 20
-#          then:
-#            - light.turn_on:
-#                id: leds
-#                brightness: 100%
-#                red: 100%
-#                green: 0%
-#                blue: 0%
-
     on_value:
       - if:
           condition:
@@ -151,108 +318,56 @@ sensor:
               id: display1
               page_id: page1
           then:                   
-            - delay: 0.5s
-            - homeassistant.service: 
-                service: climate.set_temperature
-                data_template:
-                  value: !lambda "return id(encoder).state / 2;"
-                  entity_id: ${climate_entity} 
-    on_clockwise:
+            - script.execute: set_temp
       - if:
           condition:
             display.is_displaying_page:
               id: display1
               page_id: page2
-          then:        
-            - homeassistant.service:
-                service: media_player.volume_set
-                data_template:                 
-                  volume_level: !lambda "return (id(media_entity_vol).state * 100 + 2) / 100;"
-                  entity_id: ${media_volume_entity}
+          then:      
+            - script.execute: set_vol
       - if:
           condition:
             display.is_displaying_page:
               id: display1
               page_id: page3
           then:        
-            - homeassistant.service: 
-                service: light.turn_on
-                data_template:
-                  brightness: !lambda "return (id(light_pct).state + ${dimmer_step_size});"
-                  entity_id: ${light1}
+            - script.execute: set_light1            
       - if:
           condition:
             display.is_displaying_page:
               id: display1
               page_id: page4
           then:        
-            - homeassistant.service: 
-                service: light.turn_on
-                data_template:
-                  color_temp: !lambda "return (id(light_temp).state + 25);"
-                  entity_id: ${light1}
-                  
-    on_anticlockwise:
-      - if:
-          condition:
-            display.is_displaying_page:
-              id: display1
-              page_id: page2
-          then:        
-            - homeassistant.service:
-                service: media_player.volume_set
-                data_template:                 
-                  volume_level: !lambda "return (id(media_entity_vol).state * 100 - ${volume_step_size}) / 100;"
-                  entity_id: ${media_volume_entity}
-      - if:
-          condition:
-            display.is_displaying_page:
-              id: display1
-              page_id: page3
-          then:        
-            - homeassistant.service: 
-                service: light.turn_on
-                data_template:
-                  brightness: !lambda "return (id(light_pct).state - ${dimmer_step_size});"
-                  entity_id: ${light1}
-      - if:
-          condition:
-            display.is_displaying_page:
-              id: display1
-              page_id: page4
-          then:        
-            - homeassistant.service: 
-                service: light.turn_on
-                data_template:
-                  color_temp: !lambda "return (id(light_temp).state - ${color_temp_step_size});"
-                  entity_id: ${light1}
-
-      
-#MEDIA PLAYER
+            - script.execute: set_light2       
+###################################################################
   - platform: homeassistant
     id: media_entity_vol
     entity_id: ${media_volume_entity}
     attribute: volume_level
     internal: true
-
-####GROUPS
-##Lights
+####################################################################
   - platform: homeassistant
     entity_id: ${light1}
-    id: light_pct
+    id: light1_brt
     attribute: brightness
   - platform: homeassistant
     entity_id: ${light1}
-    id: light_temp
-    attribute: color_temp
-
-####INPUT NUMBER
+    id: light1
+#    attribute: color_temp
   - platform: homeassistant
-    entity_id: ${input_number_entity}
-    id: target
-#### LOCAL TEMPERATURES        
+    entity_id: ${light2}
+    id: light2_brt
+    attribute: brightness
   - platform: homeassistant
-    entity_id: ${average_sensor}
+    entity_id: ${light2}
+    id: light2
+#    attribute: color_temp
+  - platform: homeassistant
+    entity_id: input_number.target
+    id: target      
+  - platform: homeassistant
+    entity_id: sensor.average_indoor_temperature
     id: avg_temp
   - platform: homeassistant
     entity_id: ${temp_sensor_2}
@@ -263,36 +378,41 @@ sensor:
   - platform: homeassistant
     id: thermo_temp
     entity_id: sensor.thermostat_current_temperature
-#### THERMOSTAT TEMPERATURE
+  - platform: homeassistant
+    id: temp3
+    entity_id: ${temp_sensor_3}
+  - platform: homeassistant
+    id: humid1
+    entity_id: ${humid_sensor_1}
+  - platform: homeassistant
+    id: iaq1
+    entity_id: ${iaq_sensor_1}
   - platform: homeassistant
     id: thermostat_setpoint
     entity_id: ${climate_entity}
     attribute: temperature
-##Text Sensors
+##########################################################################
 text_sensor:
-##HVAC Action
   - platform: homeassistant
     id: hvac_txt
     entity_id: ${climate_entity}
     attribute: hvac_action
-##HVAC Fan
   - platform: homeassistant
     id: hvac_fan
     entity_id: ${climate_entity}
     attribute: fan_mode
-##HVAC Mode
   - platform: homeassistant
     id: hvac_mode
     entity_id: ${climate_entity}
-##Media Title
   - platform: homeassistant
     entity_id: ${media_title_entity}
     id: nowplay
     attribute: media_title
-#FONT FILES
-##to use new icons go to https://pictogrammers.github.io/@mdi/font/6.9.96/ and copy the hex code from the icon you want
-##  add under glyphs below, hex code needs to be preceded by \U000 
-## to display on screen use a seperate print lines for icons and text, and set font to the font id (ex: mdi3)
+  - platform: homeassistant
+    entity_id: ${light2}
+    id: light2_txt
+#    attribute: 
+##############################################################
 font:
   - file: 'fonts/arial.ttf'
     id: font1
@@ -301,8 +421,8 @@ font:
     id: mdi3
     size: 33
     glyphs: [
-      "\U000F0036", #apple finder logo
-      "\U000F0035", #apple Logo
+      "\U000F1254", #light group on
+      "\U000F12CE", #light group off
       "\U000F0A21", #windows 98 flag
       "\U000F05AA", #wifi off
       "\U000F05A9", #wifi
@@ -314,10 +434,8 @@ font:
     id: mdi2
     size: 42
     glyphs: [
-      "\U000F0036", #apple finder logo
-      "\U000F0035", #apple Logo
-      "\U000F0A21", #windows 98 flag
-
+      "\U000F1254", #light group on
+      "\U000F12CE", #light group off
       "\U000F075E", #Volume -
       "\U000F075D", #vol +
       "\U000F05AA", #wifi off
@@ -326,10 +444,10 @@ font:
       ]
   - file: 'fonts/arial.ttf'
     id: font0
-    size: 21
+    size: 20
   - file: 'fonts/arial.ttf'
     id: font00
-    size: 19
+    size: 15
   - file: 'BebasNeue-Regular.ttf'
     id: font2
     size: 40
@@ -338,8 +456,8 @@ font:
     size: 55
   - file: 'fonts/arial.ttf'
     id: font3
-    size: 22
-##DISLAY COLORS
+    size: 25
+#######################################################
 color:
   - id: red
     red: 100%
@@ -366,11 +484,11 @@ color:
     green: 0%
     blue: 50%
     white: 5%
-## SPI
+############################################################
 spi:
   clk_pin: GPIO12
   mosi_pin: GPIO11
-##Switches
+################################################################
 switch:
   - platform: gpio
     pin:
@@ -386,28 +504,11 @@ switch:
         output: True
     name: "${esp_name} Display"
     id: backlight
-#TO-DO
-#light:
-#  - platform: neopixelbus
-#    type: BRG
-#    variant: P9813
-##    clock_pin: GPIO45
-##    data_pin: GPIO42
-##    num_leds: 7
-##    id: leds
-##  - platform: fastled_spi
-##    chipset: APA102
-#    data_pin: GPIO42
-#    clock_pin: GPIO45
-#    num_leds: 7
-##    rgb_order: BRG
-#    id: leds
-
-##Time
+#################################################
 time:
   - platform: homeassistant
     id: esp_time
-#screen
+################################################
 display:
   - platform: st7789v
     model: CUSTOM
@@ -422,53 +523,52 @@ display:
     dc_pin: GPIO13
     reset_pin: GPIO9
     id: display1
-    update_interval: 0.1s
+    update_interval: 0.1s     
     pages:
       - id: page1
         lambda: |-          
           it.strftime(230, 0, id(font3), id(green), "%H:%M", id(esp_time).now());
-          
-          it.printf(2, 0, id(font0), id(blue), "HVAC: %s - %s",id(hvac_mode).state.c_str(), id(hvac_txt).state.c_str());
-          
+          it.printf(2, 0, id(font00), id(blue), "HVAC: %s -%s",id(hvac_mode).state.c_str(), id(hvac_txt).state.c_str());
           it.printf(2, 60, id(font2), id(green), TextAlign::BASELINE_LEFT, "%.1f°", id(target).state);
-        
           it.printf(2, 60, id(font0), id(blue_green), "Target");
-
           it.printf(210, 60, id(font2), id(green), TextAlign::BASELINE_LEFT, "%.1f°", id(avg_temp).state);
-        
           it.printf(205, 60, id(font0), id(blue_green), "Average");
-
           it.printf(110, 120, id(font2), id(green), TextAlign::BASELINE_LEFT, "%.1f°", id(temp1).state);
-          it.print(108, 120, id(font0), id(blue_green), "Adora");
-
+          it.print(108, 120, id(font0), id(blue_green), "Sensor");
           it.printf(210, 120, id(font2), id(green), TextAlign::BASELINE_LEFT, "%.1f°", id(encoder).state / 2);
           it.print(213, 120, id(font0), id(blue_green), "Input");
-
           it.printf(275, 125, id(mdi3), id(violet), "%s", id(wifi_connection) ? "\U000F05A9" : "\U000F05AA");
-
           it.printf(4, 120, id(font2), id(green), TextAlign::BASELINE_LEFT, "%.1f°", id(thermo_temp).state);
           it.print(5, 120, id(font0), id(blue_green), "Hallway");
-
           it.printf(80, 140, id(font3), id(green), "Bedroom %.1f", id(temp2).state);
       - id: page2
         lambda: |-
           it.rectangle(0, 0, 320, 170, id(violet));
-          it.filled_rectangle(54, 3,id(media_entity_vol).state * 200, 29, id(blue));
+          it.filled_rectangle(54, 3,id(encoder).state, 29, id(blue));
           it.rectangle(55, 2, 200, 30, id(blue));
-          it.print(120, 50, id(font3), id(green), "KODI");
+          it.print(120, 50, id(font3), id(green), "Volume");
           it.print(2, 2, id(mdi2), id(red), "\U000F075E");
           it.print(275, 2, id(mdi2), id(green), "\U000F075D");
-          it.printf(115, 75, id(font4), id(green), "%.0f", id(media_entity_vol).state * 100);
-          it.printf(5, 163, id(font3), id(green), TextAlign::BASELINE_LEFT, "%s", id(nowplay).state.c_str());          
+          it.printf(115, 75, id(font4), id(green), "%.0f", id(encoder).state / 2);
+          it.printf(5, 163, id(font0), id(green), TextAlign::BASELINE_LEFT, "%s", id(nowplay).state.c_str());   
+          it.printf(275, 125, id(mdi3), id(violet), "%s", id(wifi_connection) ? "\U000F05A9" : "\U000F05AA");    
       - id: page3
         lambda: |-
           it.strftime(230, 0, id(font3), id(green), "%H:%M", id(esp_time).now());
-          it.filled_rectangle(54, 31, id(light_pct).state / 255 * 200, 49, id(violet));
-          it.rectangle(52, 30, 201, 50, id(red));
-          it.print(10, 110, id(font4), id(green), "Light Dimmer");
+          it.filled_rectangle(4, 3, id(encoder).state / 255 * 200, 39, id(violet));
+          it.rectangle(3, 2, 201, 40, id(red));
+          it.print(4, 110, id(font2), id(green), "Bedroom Lights");
+          it.printf(160, 85, id(font4), id(green), TextAlign::BASELINE_CENTER, "%.0f%%", id(encoder).state / 255 * 100);
+          it.printf(275, 125, id(mdi3), id(violet), "%s", id(wifi_connection) ? "\U000F05A9" : "\U000F05AA");
       - id: page4
         lambda: |-
           it.strftime(230, 0, id(font3), id(green), "%H:%M", id(esp_time).now());
-          it.filled_rectangle(54, 31, id(light_temp).state / 217 * 200 - 153, 49, id(red));
-          it.rectangle(52, 30, 201, 50, id(blue));
-          it.print(10, 110, id(font4), id(green), "Color Temp");
+          it.printf(2, 60, id(font2), id(green), TextAlign::BASELINE_LEFT, "%.1f°", id(temp3).state);
+          it.printf(2, 60, id(font0), id(blue_green), "Temp");
+          it.printf(210, 60, id(font2), id(green), TextAlign::BASELINE_LEFT, "%.1f%%", id(avg_temp).state);
+          it.printf(205, 60, id(font0), id(blue_green), "Humidity");
+          it.printf(110, 60, id(font2), id(green), TextAlign::BASELINE_LEFT, "%.0f", id(iaq1).state);
+          it.print(112, 60, id(font0), id(blue_green), "IAQ");
+          it.printf(4, 110, id(font2), id(green), "Kitchen Lights: %s", id(light2_txt).state.c_str());
+          it.printf(275, 125, id(mdi3), id(violet), "%s", id(wifi_connection) ? "\U000F05A9" : "\U000F05AA");
+
