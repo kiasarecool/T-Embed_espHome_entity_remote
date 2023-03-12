@@ -273,35 +273,25 @@ substitutions:
           - invert:
         on_multi_click:
         - timing: 
-            - OFF for at least 1500ms 
             - ON for 1ms to 400ms              # Click
           then:
             - display.page.show_next: display1
+            - delay: 50ms
             - script.execute: set_rot
+        
+        - timing:            # Dub Click -
+            - ON for 1ms to 300ms
+            - OFF for at least 1ms 
+            - ON for 1ms to 300ms
+          then:
+            - script.execute: toggle  
         - timing:
             - OFF for at least 1500ms 
             - ON for 400ms to 3000ms            # Short Hold
           then:
             - display.page.show_next: display1
-            - script.execute: things_on
-        - timing:
-            - OFF for at least 1500ms             # Dub Click -
-            - ON for 1ms to 500ms
-            - OFF for at least 1ms 
-            - ON for 1ms to 500ms
-          then:
-            - script.execute: toggle
-        - timing:
-            - OFF for at least 1500ms             # Trip Click -
-            - ON for 50ms to 500ms 
-            - OFF for 50ms to 500ms
-            - ON for 50ms to 500ms
-            - OFF for 50ms to 500ms
-            - ON for 50ms to 500ms 
-          then:
-            - script.execute: things_off              
-        - timing:
-            - OFF for at least 1500ms   
+            - script.execute: things_on           
+        - timing: 
             - ON for at least 3100ms             # 3s + Hold
           then:
              - switch.toggle: backlight
